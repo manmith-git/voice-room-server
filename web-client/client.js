@@ -27,7 +27,17 @@ socket.on('signal', async ({ from, data }) => {
 });
 
 async function createPeer(asInitiator = false) {
-  pc = new RTCPeerConnection();
+  const pc = new RTCPeerConnection({
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' }, // free Google STUN
+    {
+      urls: 'turn:relay1.expressturn.com:3478', // free public TURN relay
+      username: 'efree',
+      credential: 'efree'
+    }
+  ]
+});
+
   pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit('signal', { room: roomCode, data: { candidate: ev.candidate } }); };
   pc.ontrack = (ev) => {
     const audio = document.createElement('audio');
