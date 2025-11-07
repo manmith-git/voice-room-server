@@ -1,5 +1,15 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
+
+// Serve the web-client folder at "/"
+app.use(express.static(path.join(__dirname, 'web-client')));
+
+// Optional redirect for root "/"
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'web-client', 'index.html'));
+});
+
 const { Server } = require('socket.io');
 const crypto = require('crypto');
 
