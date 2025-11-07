@@ -1,3 +1,5 @@
+// web-client/client.js — with STUN/TURN support
+
 const SIGNALING_SERVER = window.location.origin;
 const socket = io(SIGNALING_SERVER);
 
@@ -6,7 +8,10 @@ let localStream = null;
 let roomCode = null;
 let mySocketId = null;
 
-socket.on('connect', () => { mySocketId = socket.id; console.log('connected', mySocketId); });
+socket.on('connect', () => {
+  mySocketId = socket.id;
+  console.log('connected', mySocketId);
+});
 
 socket.on('members', (members) => {
   document.getElementById('members').innerText = 'Members: ' + members.join(', ');
@@ -22,29 +27,40 @@ socket.on('signal', async ({ from, data }) => {
   } else if (data.type === 'answer') {
     await pc.setRemoteDescription(new RTCSessionDescription(data));
   } else if (data.candidate) {
-    try { await pc.addIceCandidate(data.candidate); } catch(e){ console.warn(e); }
+    try { await pc.addIceCandidate(data.candidate); } catch (e) { console.warn(e); }
   }
 });
 
 async function createPeer(asInitiator = false) {
-  const pc = new RTCPeerConnection({
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' }, // free Google STUN
-    {
-      urls: 'turn:relay1.expressturn.com:3478', // free public TURN relay
-      username: 'efree',
-      credential: 'efree'
-    }
-  ]
-});
+  // ✅ Add STUN and TURN servers here
+  pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      {
+        urls: 'turn:relay1.expressturn.com:3478',
+        username: 'efree',
+        credential: 'efree'
+      }
+    ]
+  });
 
-  pc.onicecandidate = (ev) => { if (ev.candidate) socket.emit('signal', { room: roomCode, data: { candidate: ev.candidate } }); };
+  pc.onicecandidate = (ev) => {
+    if (ev.candidate) {
+      socket.emit('signal', { room: roomCode, data: { candidate: ev.candidate } });
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    console.log('Connection state:', pc.connectionState);
+  };
+
   pc.ontrack = (ev) => {
     const audio = document.createElement('audio');
     audio.autoplay = true;
     audio.srcObject = ev.streams[0];
     document.getElementById('audio').appendChild(audio);
   };
+
   if (!localStream) {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   }
@@ -58,7 +74,7 @@ document.getElementById('create').onclick = async () => {
     if (res.ok) {
       roomCode = res.room;
       document.getElementById('room').value = roomCode;
-      alert('Room created: ' + roomCode + '\nShare it with others');
+      alert('Room created: ' + roomCode + '\\nShare it with others');
     }
   });
 };
@@ -70,7 +86,6 @@ document.getElementById('join').onclick = async () => {
   socket.emit('join-room', { room, name }, async (res) => {
     if (!res.ok) return alert(res.error || 'join failed');
     roomCode = room;
-    // create peer and create offer
     await createPeer(true);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
