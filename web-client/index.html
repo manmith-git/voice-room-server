@@ -1,21 +1,16 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Voice Room - Web Client</title>
-</head>
 <body>
-  <h3>Voice Room — Web Client</h3>
+  <h3>Voice Room – Web Client</h3>
   <div>
     <button id="create">Create Room</button>
     Room: <input id="room" placeholder="room code">
     Name: <input id="name" placeholder="your name">
     <button id="join">Join</button>
     <button id="leave">Leave</button>
+    <button id="muteBtn" disabled>Mute 🔇</button>
   </div>
   <div id="members"></div>
   <div id="audio"></div>
+
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script src="client.js"></script>
 </body>
-</html>
