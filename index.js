@@ -1,23 +1,29 @@
-// index.js — with mute/unmute support and ready for Render
+// server/index.js — Final Version with working create/join/signaling
 
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 
-// ✅ Create app and server
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
 
-// ✅ Serve web-client folder
+// ✅ Enable CORS for all origins (important for VS Code webview)
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+// ✅ Serve static files for browser testing (web-client)
 app.use(express.static(path.join(__dirname, 'web-client')));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'web-client', 'index.html'));
 });
 
-// -------------------- SOCKET.IO SIGNALING LOGIC --------------------
+// -------------------- SOCKET.IO SIGNALING --------------------
 const rooms = {};
 
 function genRoomCode() {
@@ -31,31 +37,40 @@ function genRoomCode() {
 }
 
 io.on('connection', (socket) => {
-  console.log('🔌 socket connected', socket.id);
+  console.log('🟢 New socket connected:', socket.id);
 
-  // 🏠 Create a new room
+  // CREATE ROOM
   socket.on('create-room', (name, cb) => {
     let room = genRoomCode();
     while (rooms[room]) room = genRoomCode();
+
     rooms[room] = { members: {} };
     rooms[room].members[socket.id] = name || 'creator';
     socket.join(room);
-    console.log('🆕 room created', room);
-    cb({ ok: true, room });
+
+    console.log(`🆕 Room created: ${room}`);
+    if (cb) cb({ ok: true, room });
+
     io.to(room).emit('members', Object.values(rooms[room].members));
   });
 
-  // 🚪 Join existing room
+  // JOIN ROOM
   socket.on('join-room', ({ room, name }, cb) => {
-    if (!rooms[room]) return cb({ ok: false, error: 'Room not found' });
+    if (!rooms[room]) {
+      console.log(`❌ Room not found: ${room}`);
+      if (cb) cb({ ok: false, error: 'Room not found' });
+      return;
+    }
+
     rooms[room].members[socket.id] = name || 'guest';
     socket.join(room);
-    cb({ ok: true, room });
+    console.log(`👤 ${name} joined room ${room}`);
+
+    if (cb) cb({ ok: true, room });
     io.to(room).emit('members', Object.values(rooms[room].members));
-    console.log(`👤 ${name} joined ${room}`);
   });
 
-  // 🔁 WebRTC signaling (offer/answer/ICE)
+  // SIGNALING
   socket.on('signal', ({ room, to, data }) => {
     if (to && io.sockets.sockets.get(to)) {
       io.to(to).emit('signal', { from: socket.id, data });
@@ -64,29 +79,28 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 🔇 Handle mute/unmute events
-  socket.on('mute-toggle', (data) => {
-    const { room, muted } = data;
-    if (rooms[room]) {
-      console.log(`🎙️ ${socket.id} ${muted ? 'muted' : 'unmuted'} in ${room}`);
-      socket.to(room).emit('user-muted', { from: socket.id, muted });
-    }
+  // MUTE/UNMUTE
+  socket.on('mute-toggle', ({ room, muted }) => {
+    socket.to(room).emit('user-muted', { from: socket.id, muted });
   });
 
-  // ❌ Handle disconnect and cleanup
+  // DISCONNECT
   socket.on('disconnecting', () => {
     const joined = Object.keys(socket.rooms).filter(r => r !== socket.id);
     joined.forEach(room => {
       if (rooms[room]) {
         delete rooms[room].members[socket.id];
         io.to(room).emit('members', Object.values(rooms[room].members));
-        if (Object.keys(rooms[room].members).length === 0) delete rooms[room];
+        if (Object.keys(rooms[room].members).length === 0) {
+          console.log(`🗑️ Room deleted: ${room}`);
+          delete rooms[room];
+        }
       }
     });
   });
 });
 
-// -------------------------------------------------------------------
+// --------------------------------------------------------------
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log('✅ Signaling server running on port', PORT));
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
