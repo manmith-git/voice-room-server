@@ -1,4 +1,4 @@
-// server/index.js — Final Version with working create/join/signaling
+// server/index.js — Final Version with signaling + audio relay
 
 const express = require('express');
 const http = require('http');
@@ -8,15 +8,16 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// ✅ Enable CORS for all origins (important for VS Code webview)
+// ✅ Allow all origins (important for VS Code webview and Render)
 const io = new Server(server, {
   cors: {
     origin: '*',
     methods: ['GET', 'POST']
-  }
+  },
+  maxHttpBufferSize: 1e7 // allow larger audio chunks (~10 MB)
 });
 
-// ✅ Serve static files for browser testing (web-client)
+// ✅ Serve static files (for browser debugging / testing)
 app.use(express.static(path.join(__dirname, 'web-client')));
 
 app.get('/', (req, res) => {
@@ -50,7 +51,6 @@ io.on('connection', (socket) => {
 
     console.log(`🆕 Room created: ${room}`);
     if (cb) cb({ ok: true, room });
-
     io.to(room).emit('members', Object.values(rooms[room].members));
   });
 
@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
     io.to(room).emit('members', Object.values(rooms[room].members));
   });
 
-  // SIGNALING
+  // SIGNALING (WebRTC data exchange)
   socket.on('signal', ({ room, to, data }) => {
     if (to && io.sockets.sockets.get(to)) {
       io.to(to).emit('signal', { from: socket.id, data });
@@ -79,12 +79,21 @@ io.on('connection', (socket) => {
     }
   });
 
-  // MUTE/UNMUTE
+  // MUTE/UNMUTE relay
   socket.on('mute-toggle', ({ room, muted }) => {
     socket.to(room).emit('user-muted', { from: socket.id, muted });
   });
 
-  // DISCONNECT
+  // 🎙️ AUDIO STREAM relay
+  socket.on('audio-chunk', (chunk) => {
+    // Forward mic audio to others in the same room
+    const roomsJoined = Array.from(socket.rooms).filter((r) => r !== socket.id);
+    roomsJoined.forEach((room) => {
+      socket.to(room).emit('audio-play', chunk);
+    });
+  });
+
+  // DISCONNECT handling
   socket.on('disconnecting', () => {
     const joined = Object.keys(socket.rooms).filter(r => r !== socket.id);
     joined.forEach(room => {
