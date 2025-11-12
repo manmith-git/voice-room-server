@@ -86,12 +86,13 @@ io.on('connection', (socket) => {
 
   // 🎙️ AUDIO STREAM relay
   socket.on('audio-chunk', (chunk) => {
-    // Forward mic audio to others in the same room
-    const roomsJoined = Array.from(socket.rooms).filter((r) => r !== socket.id);
-    roomsJoined.forEach((room) => {
-      socket.to(room).emit('audio-play', chunk);
-    });
+  const roomsJoined = Array.from(socket.rooms).filter((r) => r !== socket.id);
+  console.log(`[DEBUG] audio-chunk from ${socket.id} → rooms:`, roomsJoined);
+  roomsJoined.forEach((room) => {
+    socket.to(room).emit('audio-play', chunk);
   });
+});
+
 
   // DISCONNECT handling
   socket.on('disconnecting', () => {
