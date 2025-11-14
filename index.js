@@ -1,4 +1,4 @@
-// server/index.js — Final Version with signaling + audio relay
+// server/index.js — Final Version with signaling + audio relay FIXED
 
 const express = require('express');
 const http = require('http');
@@ -8,7 +8,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 
-// ✅ Allow all origins (important for VS Code webview and Render)
+// Allow all origins
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -17,7 +17,7 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e7 // allow larger audio chunks (~10 MB)
 });
 
-// ✅ Serve static files (for browser debugging / testing)
+// Serve static files (browser client)
 app.use(express.static(path.join(__dirname, 'web-client')));
 
 app.get('/', (req, res) => {
@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
     io.to(room).emit('members', Object.values(rooms[room].members));
   });
 
-  // SIGNALING (WebRTC data exchange)
+  // SIGNALING (WebRTC exchange)
   socket.on('signal', ({ room, to, data }) => {
     if (to && io.sockets.sockets.get(to)) {
       io.to(to).emit('signal', { from: socket.id, data });
@@ -84,12 +84,25 @@ io.on('connection', (socket) => {
     socket.to(room).emit('user-muted', { from: socket.id, muted });
   });
 
-  // 🎙️ AUDIO STREAM relay
+  // ------------------------------------------------------------
+  // 🎙️ AUDIO STREAM RELAY — FIXED FOR PYTHON
+  // ------------------------------------------------------------
   socket.on('audio-chunk', (chunk) => {
-    // Forward mic audio to others in the same room
+
+    // Python sends: { type:'Buffer', data:[...] }
+    if (chunk && chunk.data) {
+      chunk = Buffer.from(chunk.data);
+    }
+
+    // Browser sends ArrayBuffer, convert too
+    if (chunk instanceof ArrayBuffer) {
+      chunk = Buffer.from(chunk);
+    }
+
     const roomsJoined = Array.from(socket.rooms).filter((r) => r !== socket.id);
+
     roomsJoined.forEach((room) => {
-      socket.to(room).emit('audio-play', chunk);
+      socket.to(room).emit('audio-play', chunk); // relay binary
     });
   });
 
