@@ -88,6 +88,7 @@ io.on('connection', (socket) => {
   // 🎙️ AUDIO STREAM RELAY — FIXED FOR PYTHON
   // ------------------------------------------------------------
   socket.on('audio-chunk', (chunk) => {
+<<<<<<< HEAD
 
     // Python sends: { type:'Buffer', data:[...] }
     if (chunk && chunk.data) {
@@ -104,7 +105,15 @@ io.on('connection', (socket) => {
     roomsJoined.forEach((room) => {
       socket.to(room).emit('audio-play', chunk); // relay binary
     });
+=======
+  console.log(`[DEBUG] audio-chunk from ${socket.id}, type: ${typeof chunk}, size: ${chunk?.length || chunk?.byteLength}`);
+  const roomsJoined = Array.from(socket.rooms).filter((r) => r !== socket.id);
+  roomsJoined.forEach((room) => {
+    socket.to(room).emit('audio-play', chunk);
+>>>>>>> d66df5e5f0e08c6a73a2e3042b0f7a5e9ecfd3bd
   });
+});
+;
 
   // DISCONNECT handling
   socket.on('disconnecting', () => {
